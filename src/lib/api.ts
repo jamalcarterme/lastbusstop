@@ -42,11 +42,21 @@ async function request(path: string, { method = "GET", body, isForm = false, par
   if (isForm) fetchBody = body as FormData;
   else if (body !== undefined) { headers["Content-Type"] = "application/json"; fetchBody = JSON.stringify(body); }
 
-  let res: Response;
-  try {
-    res = await fetch(url, { method, headers, body: fetchBody });
-  } catch {
-    const err = new ApiError("Could not reach the server. Please check your internet connection and try again.");
+  // Render free instances sleep when idle and need 30-60s to wake: long timeout + retry once.
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 3 && !res; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60000);
+    try {
+      res = await fetch(url, { method, headers, body: fetchBody, signal: ctrl.signal });
+    } catch {
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 3000));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (!res) {
+    const err = new ApiError("Could not reach the server. It may be waking up - please wait a few seconds and try again.");
     err.isNetworkError = true;
     throw err;
   }
@@ -61,6 +71,9 @@ async function request(path: string, { method = "GET", body, isForm = false, par
   }
   return data;
 }
+
+// Wake the backend as soon as the site loads (response ignored)
+if (typeof window !== "undefined") { fetch(BASE_URL + "/", { mode: "no-cors" }).catch(() => {}); }
 
 const send = (method: string) => (path: string, body?: unknown) => request(path, { method, body });
 

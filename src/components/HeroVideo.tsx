@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
 import { site } from "@/lib/site";
 
 const { youtubeId: id, mp4 } = site.heroVideo;
 const ytSrc =
   `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}` +
-  `&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&enablejsapi=1`;
+  `&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&enablejsapi=1&cc_load_policy=0`;
 
 /**
  * Full-bleed background video that starts the moment the page loads.
@@ -19,7 +18,6 @@ export default function HeroVideo() {
   const frame = useRef<HTMLIFrameElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
-  const [muted, setMuted] = useState(true);
 
   const cmd = (func: string, args: unknown[] = []) =>
     frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
@@ -41,15 +39,13 @@ export default function HeroVideo() {
     const timers = [400, 1200, 2500].map((t) => setTimeout(kick, t));
     const onGesture = () => { kick(); window.removeEventListener("pointerdown", onGesture); };
     window.addEventListener("pointerdown", onGesture, { once: true });
-    const reveal = setTimeout(() => setReady(true), 1800);
-    return () => { timers.forEach(clearTimeout); clearTimeout(reveal); window.removeEventListener("pointerdown", onGesture); };
+    const onMsg = (e: MessageEvent) => {
+      if (typeof e.data !== "string" || !e.data.includes("playerState")) return;
+      try { const d = JSON.parse(e.data); const st = d?.info?.playerState ?? d?.info; if (st === 1) setReady(true); else if (st === 0) cmd("playVideo"); } catch {}
+    };
+    window.addEventListener("message", onMsg);
+    return () => { timers.forEach(clearTimeout); window.removeEventListener("message", onMsg); window.removeEventListener("pointerdown", onGesture); };
   }, []);
-
-  const toggleSound = () => {
-    if (mp4 && video.current) { video.current.muted = !muted; }
-    else { cmd(muted ? "unMute" : "mute"); if (muted) cmd("setVolume", [80]); cmd("playVideo"); }
-    setMuted(!muted);
-  };
 
   return (
     <>
@@ -65,13 +61,10 @@ export default function HeroVideo() {
           <iframe ref={frame} title="Last Bus Stop Ministry worship background video" src={ytSrc} onLoad={kick}
             allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" tabIndex={-1} aria-hidden
             className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border-0 transition-opacity duration-1000 ${ready ? "opacity-100" : "opacity-0"}`}
-            style={{ width: "max(100vw, 177.78vh)", height: "max(56.25vw, 100vh)" }} />
+            style={{ width: "max(115vw, 204vh)", height: "max(64.7vw, 115vh)" }} />
         )}
+        <div className="absolute inset-0 z-10" />
       </div>
-      <button onClick={toggleSound} aria-label={muted ? "Unmute video" : "Mute video"}
-        className="glass absolute bottom-6 right-6 z-20 flex h-11 w-11 items-center justify-center rounded-full text-paper transition hover:border-gold hover:text-gold md:bottom-8 md:right-10">
-        {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-      </button>
     </>
   );
 }
